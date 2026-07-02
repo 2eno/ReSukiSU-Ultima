@@ -19,6 +19,8 @@ A based-on [`SukiSU-Ultra/SukiSU-Ultra`](https://github.com/SukiSU-Ultra/SukiSU-
 5. KPM Support
 6. Tweaks to the manager theme and the built-in susfs management tool.
 7. Multi manager support, for default [Official KernelSU](https://github.com/tiann/KernelSU)/[RKSU](https://github.com/rsuntk/KernelSU)/[MKSU](https://github.com/5ec1cff/KernelSU)/[SukiSU](https://github.com/SukiSU-Ultra/SukiSU-Ultra) is supported work as manager with ReSukiSU Ultima's kernel
+8. **Sentinel**: kernel-side root-probe detection with per-app cloaking and optional su-request notifications.
+9. **Built-in Zygisk**: a self-contained, ptrace-based Zygisk implementation - run Zygisk modules without a separate Zygisk provider.
 
 ## Compatibility Status
 
@@ -56,6 +58,48 @@ See the [repository](https://github.com/spacealtctrl/ReSukiSU-Ultima).
 > 2. Non-GKI devices requires `CONFIG_KALLSYMS=y` and `CONFIG_KALLSYMS_ALL=y`
 > 3. For kernels below `4.19`, backporting from `set_memory.h` from `4.19` is required.
 
+## Sentinel
+
+Sentinel is a kernel-side root-probe detector. It watches for apps that probe for
+root - e.g. `access("/system/bin/su")`, magisk/ksu path checks, `packages.list`
+enumeration - and streams those probe events to the manager, where you can review
+them and **cloak** the offending app. Cloaking hides root from that app by reusing
+the existing App Profile enforcement (umount + root-deny), so a detector sees a
+clean, unrooted device.
+
+- **Recent Probes**: a live feed on the Sentinel screen showing which apps probed
+  for root and what they looked for.
+- **Auto-cloak**: automatically cloak any new app that probes for root.
+- **Notify on root requests**: instead of auto-cloaking, get a notification when a
+  non-cloaked app probes for su, with one-tap **Grant** / **Cloak** / **Ignore**. A
+  cloaked app never notifies. (Auto-cloak and Notify are mutually exclusive.)
+
+Detection is opt-in at runtime from the manager's Sentinel screen; kernel overhead
+is negligible when it is off.
+
+> [!Note]
+>
+> 1. Requires `CONFIG_KSU_SENTINEL=y` (enabled by default; `depends on KSU`).
+> 2. Cloak enforcement reuses App Profile, so no extra config is needed.
+
+## Built-in Zygisk
+
+ReSukiSU Ultima ships its own self-contained Zygisk implementation
+("Zygisk-Ultima"), so Zygisk modules work without installing a separate Zygisk
+provider. It is a ptrace-based injector deployed under `ksud` (not as a module) and
+is **off by default** - enable it from the manager's settings, then reboot. The
+launch hook installed in `post-fs-data.d` doubles as a kill-switch: if anything ever
+goes wrong, deleting it disables Zygisk on the next boot.
+
+This engine is adapted from [**ReZygisk**](https://github.com/PerformanC/ReZygisk) by
+[The PerformanC Organization](https://github.com/PerformanC) (GPL-3.0) - huge thanks
+to them for keeping it open source.
+
+> [!Note]
+>
+> 1. Off by default; toggle it in the manager and reboot to apply.
+> 2. No extra kernel config is required.
+
 ## Sponsor
 
 - [ShirkNeko](https://afdian.com/a/shirkneko) (maintainer of SukiSU)
@@ -82,6 +126,7 @@ See the [repository](https://github.com/spacealtctrl/ReSukiSU-Ultima).
 ## Credit
 
 - [SukiSU-Ultra/SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra)： upstream
+- [ReZygisk](https://github.com/PerformanC/ReZygisk) by [The PerformanC Organization](https://github.com/PerformanC): the open-source (GPL-3.0) ptrace-based Zygisk implementation our built-in Zygisk engine is adapted from. Thank you for keeping it open source.
 
 <details>
 <summary>SukiSU's credit</summary>

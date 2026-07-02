@@ -297,8 +297,8 @@ int ksu_handle_execve(int *fd, const char *filename, void *argv, void *envp, int
     /* A non-allowlisted app EXECUTING su is a real root request (unlike a passive
      * su-path access/stat that every root-detecting app does). Report it to
      * Sentinel as KIND_SU_EXEC so the manager can raise a grant prompt - only for
-     * actual su runs, like Magisk. Done before the umount short-circuit because
-     * non-allowed apps are umounted. */
+     * actual su runs, like Magisk. Done before the non-privilege short-circuit
+     * below because non-allowlisted apps get marked non-privilege. */
     if (filename && !memcmp(filename, su_path, sizeof(su_path)) &&
         !ksu_is_allow_uid_for_current(ksu_get_uid_t(current_uid())))
         ksu_sentinel_report(ksu_get_uid_t(current_uid()), filename, KSU_SENTINEL_KIND_SU_EXEC);
