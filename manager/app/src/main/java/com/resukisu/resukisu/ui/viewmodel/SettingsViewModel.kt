@@ -84,6 +84,7 @@ data class SettingsUiState(
     val useAltIcon: Boolean = false,
 
     val cardAlpha: Float = 1f,
+    val barAlpha: Float = 0.8f,
     val backgroundDim: Float = 0f,
     val isCustomBackgroundEnabled: Boolean = false,
 
@@ -144,6 +145,7 @@ class SettingsViewModel : ViewModel() {
                 currentAppLocale = getCurrentAppLocale(context),
                 useAltIcon = prefs.getBoolean("use_alt_icon", false),
                 cardAlpha = CardConfig.cardAlpha,
+                barAlpha = CardConfig.barAlpha,
                 backgroundDim = ThemeConfig.backgroundDim,
                 isCustomBackgroundEnabled = ThemeConfig.customBackgroundUri != null,
                 systemDpi = systemDpi,
@@ -287,6 +289,7 @@ class SettingsViewModel : ViewModel() {
             it.copy(
                 themeMode = index,
                 cardAlpha = CardConfig.cardAlpha,
+                barAlpha = CardConfig.barAlpha,
                 backgroundDim = ThemeConfig.backgroundDim,
             )
         }
@@ -365,6 +368,7 @@ class SettingsViewModel : ViewModel() {
             it.copy(
                 isCustomBackgroundEnabled = true,
                 cardAlpha = CardConfig.cardAlpha,
+                barAlpha = CardConfig.barAlpha,
                 backgroundDim = ThemeConfig.backgroundDim,
             )
         }
@@ -396,6 +400,7 @@ class SettingsViewModel : ViewModel() {
             it.copy(
                 isCustomBackgroundEnabled = false,
                 cardAlpha = CardConfig.cardAlpha,
+                barAlpha = CardConfig.barAlpha,
                 backgroundDim = ThemeConfig.backgroundDim,
             )
         }
@@ -413,6 +418,12 @@ class SettingsViewModel : ViewModel() {
         context.appPreferences.putBoolean("is_custom_alpha_set", true)
         context.appPreferences.putFloat("card_alpha", newValue)
         _uiState.update { it.copy(cardAlpha = newValue) }
+    }
+
+    fun handleBarAlphaChange(context: Context, newValue: Float) {
+        CardConfig.barAlpha = newValue
+        context.appPreferences.putFloat("bar_alpha", newValue)
+        _uiState.update { it.copy(barAlpha = newValue) }
     }
 
     fun handleBackgroundDimChange(context: Context, newValue: Float) {

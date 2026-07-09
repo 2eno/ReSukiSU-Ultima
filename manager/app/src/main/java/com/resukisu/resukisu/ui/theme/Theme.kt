@@ -596,7 +596,7 @@ fun Modifier.blurEffect(): Modifier {
 
     return LocalBlurState.current?.let { backdrop ->
         val blendColor =
-            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f)
+            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.barAlpha)
 
         this.then(
             Modifier.textureBlur(

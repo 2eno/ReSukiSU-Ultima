@@ -30,6 +30,15 @@ object CardConfig {
             _cardAlpha = value.coerceIn(0f, 1f)
         }
 
+    // 顶栏/底栏透明度 (blur blend alpha; 0 = fully transparent, 1 = opaque)
+    private var _barAlpha by mutableFloatStateOf(0.8f)
+
+    var barAlpha: Float
+        get() = _barAlpha
+        set(value) {
+            _barAlpha = value.coerceIn(0f, 1f)
+        }
+
     // 卡片阴影
     var cardElevation by mutableStateOf(0.dp)
         internal set
@@ -50,6 +59,7 @@ object CardConfig {
     // 配置键名
     private object Keys {
         const val CARD_ALPHA = "card_alpha"
+        const val BAR_ALPHA = "bar_alpha"
         const val CUSTOM_BACKGROUND_ENABLED = "custom_background_enabled"
         const val IS_SHADOW_ENABLED = "is_shadow_enabled"
         const val IS_CUSTOM_ALPHA_SET = "is_custom_alpha_set"
@@ -82,6 +92,7 @@ object CardConfig {
 
     fun reset() {
         cardAlpha = 1f
+        barAlpha = 0.8f
         cardElevation = 0.dp
         isShadowEnabled = true
         isCustomBackgroundEnabled = false
@@ -103,6 +114,7 @@ object CardConfig {
     fun save(context: Context) {
         val prefs = context.appPreferences
         prefs.putFloat(Keys.CARD_ALPHA, cardAlpha)
+        prefs.putFloat(Keys.BAR_ALPHA, barAlpha)
         prefs.putBoolean(Keys.CUSTOM_BACKGROUND_ENABLED, isCustomBackgroundEnabled)
         prefs.putBoolean(Keys.IS_SHADOW_ENABLED, isShadowEnabled)
         prefs.putBoolean(Keys.IS_CUSTOM_ALPHA_SET, isCustomAlphaSet)
@@ -113,6 +125,7 @@ object CardConfig {
     fun load(context: Context) {
         val prefs = context.appPreferences
         cardAlpha = prefs.getFloat(Keys.CARD_ALPHA, 1f).coerceIn(0f, 1f)
+        barAlpha = prefs.getFloat(Keys.BAR_ALPHA, 0.8f).coerceIn(0f, 1f)
         isCustomBackgroundEnabled = prefs.getBoolean(Keys.CUSTOM_BACKGROUND_ENABLED, false)
         isShadowEnabled = prefs.getBoolean(Keys.IS_SHADOW_ENABLED, true)
         isCustomAlphaSet = prefs.getBoolean(Keys.IS_CUSTOM_ALPHA_SET, false)

@@ -921,6 +921,16 @@ private fun SegmentedColumnScope.backgroundAdjustmentControls(
     item(
         topPadding = 1.dp
     ) {
+        BarAlphaSlider(
+            state = state,
+            viewModel = viewModel,
+            coroutineScope = coroutineScope
+        )
+    }
+
+    item(
+        topPadding = 1.dp
+    ) {
         DimSlider(
             state = state,
             viewModel = viewModel,
@@ -1041,6 +1051,51 @@ private fun AlphaSlider(
             )
             Text(
                 text = "${(state.cardAlpha * 100).roundToInt()}%",
+                style = MaterialTheme.typography.labelMediumEmphasized
+            )
+        }
+    }
+}
+
+@Composable
+private fun BarAlphaSlider(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    coroutineScope: CoroutineScope
+) {
+    val context = LocalContext.current
+    SettingsBaseWidget(
+        icon = Icons.Filled.BlurOn,
+        title = stringResource(R.string.settings_bar_alpha),
+        descriptionColumnContent = {
+            val barAlphaSliderValue by animateFloatAsState(
+                targetValue = state.barAlpha,
+                label = "Bar Alpha Slider Animation"
+            )
+
+            KeyPointSlider(
+                value = barAlphaSliderValue,
+                onValueChange = { newValue ->
+                    viewModel.handleBarAlphaChange(context, newValue)
+                },
+                onValueChangeFinished = {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        viewModel.saveCardConfig(context)
+                    }
+                },
+                valueRange = 0f..1f,
+                keyPoints = listOf(0.25f, 0.5f, 0.75f),
+            )
+        }
+    ) {
+        Box(contentAlignment = Alignment.CenterEnd) {
+            Text(
+                text = "100%",
+                style = MaterialTheme.typography.labelMediumEmphasized,
+                modifier = Modifier.alpha(0f)
+            )
+            Text(
+                text = "${(state.barAlpha * 100).roundToInt()}%",
                 style = MaterialTheme.typography.labelMediumEmphasized
             )
         }
