@@ -27,7 +27,8 @@ object Natives {
     // 34795: feature id 3 to adb root
     // 34966(upstream 32513): add uapi version
     // 34967(upstream 32514): allowlist v4 root profile flags
-    const val MINIMAL_SUPPORTED_KERNEL = 34966
+    // 35002: add sync set dynamic-manager api
+    const val MINIMAL_SUPPORTED_KERNEL = 35002
 
     const val KERNEL_SU_DOMAIN = "u:r:ksu:s0"
 
