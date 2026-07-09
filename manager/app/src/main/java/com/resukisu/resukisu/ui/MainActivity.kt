@@ -765,11 +765,14 @@ fun rememberMaterial3BlurBackdrop(enableBlur: Boolean): LayerBackdrop? {
         MaterialTheme.colorScheme.surfaceContainer
 
     return rememberLayerBackdrop {
-        if (ThemeConfig.isEnableBlurExp) {
-            backgroundImagePainter?.let { painter ->
-                with(painter) {
-                    draw(size = drawContext.size)
-                }
+        // When a custom background is set, draw it into the blur backdrop so the
+        // frosted top app bar and bottom nav bar show the (blurred) background
+        // instead of a solid dark surface. Falls back to surfaceContainer when
+        // there is no custom background.
+        val backdropPainter = backgroundImagePainter
+        if (backdropPainter != null) {
+            with(backdropPainter) {
+                draw(size = drawContext.size)
             }
         } else {
             drawRect(backgroundColor)
