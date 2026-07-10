@@ -921,16 +921,6 @@ private fun SegmentedColumnScope.backgroundAdjustmentControls(
     item(
         topPadding = 1.dp
     ) {
-        BarAlphaSlider(
-            state = state,
-            viewModel = viewModel,
-            coroutineScope = coroutineScope
-        )
-    }
-
-    item(
-        topPadding = 1.dp
-    ) {
         DimSlider(
             state = state,
             viewModel = viewModel,
@@ -958,6 +948,16 @@ private fun SegmentedColumnScope.backgroundAdjustmentControls(
                 )
             },
             bottomContent = {
+                item(
+                    topPadding = 1.dp,
+                ) {
+                    TransparencyLevelSlider(
+                        state = state,
+                        viewModel = viewModel,
+                        coroutineScope = coroutineScope
+                    )
+                }
+
                 item(
                     topPadding = 1.dp,
                 ) {
@@ -1058,7 +1058,7 @@ private fun AlphaSlider(
 }
 
 @Composable
-private fun BarAlphaSlider(
+private fun TransparencyLevelSlider(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
     coroutineScope: CoroutineScope
@@ -1066,17 +1066,17 @@ private fun BarAlphaSlider(
     val context = LocalContext.current
     SettingsBaseWidget(
         icon = Icons.Filled.BlurOn,
-        title = stringResource(R.string.settings_bar_alpha),
+        title = stringResource(R.string.settings_transparency_level),
         descriptionColumnContent = {
-            val barAlphaSliderValue by animateFloatAsState(
-                targetValue = state.barAlpha,
-                label = "Bar Alpha Slider Animation"
+            val levelSliderValue by animateFloatAsState(
+                targetValue = state.barBlurLevel,
+                label = "Transparency Level Slider Animation"
             )
 
             KeyPointSlider(
-                value = barAlphaSliderValue,
+                value = levelSliderValue,
                 onValueChange = { newValue ->
-                    viewModel.handleBarAlphaChange(context, newValue)
+                    viewModel.handleBarBlurLevelChange(context, newValue)
                 },
                 onValueChangeFinished = {
                     coroutineScope.launch(Dispatchers.IO) {
@@ -1084,7 +1084,7 @@ private fun BarAlphaSlider(
                     }
                 },
                 valueRange = 0f..1f,
-                keyPoints = listOf(0.25f, 0.5f, 0.75f),
+                keyPoints = listOf(0.5f),
             )
         }
     ) {
@@ -1095,7 +1095,7 @@ private fun BarAlphaSlider(
                 modifier = Modifier.alpha(0f)
             )
             Text(
-                text = "${(state.barAlpha * 100).roundToInt()}%",
+                text = "${(state.barBlurLevel * 100).roundToInt()}%",
                 style = MaterialTheme.typography.labelMediumEmphasized
             )
         }

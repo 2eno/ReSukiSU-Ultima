@@ -595,14 +595,17 @@ fun Modifier.blurEffect(): Modifier {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
 
     return LocalBlurState.current?.let { backdrop ->
+        val level = CardConfig.barBlurLevel.coerceIn(0f, 1f)
+        val blurRadius = ((level * 2f).coerceAtMost(1f) * 25f).coerceAtLeast(0.5f)
+        val tintAlpha = ((level - 0.5f) * 2f).coerceIn(0f, 1f)
         val blendColor =
-            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = CardConfig.barAlpha)
+            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = tintAlpha)
 
         this.then(
             Modifier.textureBlur(
                 backdrop = backdrop,
                 shape = RectangleShape,
-                blurRadius = 25f,
+                blurRadius = blurRadius,
                 colors = BlurColors(
                     blendColors = listOf(
                         BlendColorEntry(color = blendColor)

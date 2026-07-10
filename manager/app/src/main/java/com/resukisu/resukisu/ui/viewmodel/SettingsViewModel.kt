@@ -84,7 +84,7 @@ data class SettingsUiState(
     val useAltIcon: Boolean = false,
 
     val cardAlpha: Float = 1f,
-    val barAlpha: Float = 0.8f,
+    val barBlurLevel: Float = 0.5f,
     val backgroundDim: Float = 0f,
     val isCustomBackgroundEnabled: Boolean = false,
 
@@ -145,7 +145,7 @@ class SettingsViewModel : ViewModel() {
                 currentAppLocale = getCurrentAppLocale(context),
                 useAltIcon = prefs.getBoolean("use_alt_icon", false),
                 cardAlpha = CardConfig.cardAlpha,
-                barAlpha = CardConfig.barAlpha,
+                barBlurLevel = CardConfig.barBlurLevel,
                 backgroundDim = ThemeConfig.backgroundDim,
                 isCustomBackgroundEnabled = ThemeConfig.customBackgroundUri != null,
                 systemDpi = systemDpi,
@@ -289,7 +289,7 @@ class SettingsViewModel : ViewModel() {
             it.copy(
                 themeMode = index,
                 cardAlpha = CardConfig.cardAlpha,
-                barAlpha = CardConfig.barAlpha,
+                barBlurLevel = CardConfig.barBlurLevel,
                 backgroundDim = ThemeConfig.backgroundDim,
             )
         }
@@ -368,7 +368,7 @@ class SettingsViewModel : ViewModel() {
             it.copy(
                 isCustomBackgroundEnabled = true,
                 cardAlpha = CardConfig.cardAlpha,
-                barAlpha = CardConfig.barAlpha,
+                barBlurLevel = CardConfig.barBlurLevel,
                 backgroundDim = ThemeConfig.backgroundDim,
             )
         }
@@ -400,7 +400,7 @@ class SettingsViewModel : ViewModel() {
             it.copy(
                 isCustomBackgroundEnabled = false,
                 cardAlpha = CardConfig.cardAlpha,
-                barAlpha = CardConfig.barAlpha,
+                barBlurLevel = CardConfig.barBlurLevel,
                 backgroundDim = ThemeConfig.backgroundDim,
             )
         }
@@ -420,10 +420,10 @@ class SettingsViewModel : ViewModel() {
         _uiState.update { it.copy(cardAlpha = newValue) }
     }
 
-    fun handleBarAlphaChange(context: Context, newValue: Float) {
-        CardConfig.barAlpha = newValue
-        context.appPreferences.putFloat("bar_alpha", newValue)
-        _uiState.update { it.copy(barAlpha = newValue) }
+    fun handleBarBlurLevelChange(context: Context, newValue: Float) {
+        CardConfig.barBlurLevel = newValue
+        context.appPreferences.putFloat("bar_blur_level", newValue)
+        _uiState.update { it.copy(barBlurLevel = newValue) }
     }
 
     fun handleBackgroundDimChange(context: Context, newValue: Float) {
