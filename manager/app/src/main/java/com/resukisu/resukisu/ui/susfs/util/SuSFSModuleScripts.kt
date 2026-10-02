@@ -523,8 +523,8 @@ object ScriptGenerator {
      * 生成module.prop文件内容
      */
     fun generateModuleProp(moduleId: String): String {
-        val moduleVersion = "v2.2.0"
-        val moduleVersionCode = "2200"
+        val moduleVersion = "v2.3.0"
+        val moduleVersionCode = "2300"
 
         return """
             id=$moduleId
