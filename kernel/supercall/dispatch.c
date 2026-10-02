@@ -523,7 +523,7 @@ static int do_manage_mark(void __user *arg)
         }
         cmd.result = (u32)ret;
 #elif defined(CONFIG_KSU_SUSFS)
-        if (susfs_is_current_proc_umounted()) {
+        if (susfs_is_current_proc_no_su()) {
             ret = 0; // SYSCALL_TRACEPOINT is NOT flagged
         } else {
             ret = 1; // SYSCALL_TRACEPOINT is flagged

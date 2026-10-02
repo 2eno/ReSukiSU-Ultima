@@ -32,6 +32,8 @@ A based-on [`SukiSU-Ultra/SukiSU-Ultra`](https://github.com/SukiSU-Ultra/SukiSU-
 
 - [SuSFS](https://gitlab.com/simonpunk/susfs4ksu) in this project is **Only** support backport to kernel 4.3+
 
+- `SuSFS Inline Hook` requires the kernel side of [SuSFS](https://gitlab.com/simonpunk/susfs4ksu) **v2.3.0** or newer, the build stops with older susfs patches
+
 - `Tracepoint Syscall Redirect hook` is only support with GKI2(5.10+) kernel
 
 ## Hook Mode
