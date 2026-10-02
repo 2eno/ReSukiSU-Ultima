@@ -191,6 +191,24 @@ else ifdef CONFIG_KSU_SUSFS
     $(eval SUSFS_VERSION=$(shell cat $(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g'))
     $(info )
     $(info -- SUSFS_VERSION: $(SUSFS_VERSION))
+    # SUSFS v2.3.0 marks no-root processes with TIF_PROC_NO_SU and passes struct filename
+    # to ksu_handle_faccessat/ksu_handle_stat. Older susfs kernel patches would link
+    # against the wrong hook signatures, so refuse to build with them.
+    ifneq ($(shell grep -q "susfs_set_current_proc_no_su" $(srctree)/include/linux/susfs_def.h; echo $$?),0)
+      SUSFS_TOO_OLD := 1
+    endif
+    ifneq ($(shell grep -q "ksu_handle_faccessat.*struct filename" $(srctree)/fs/open.c; echo $$?),0)
+      SUSFS_TOO_OLD := 1
+    endif
+    ifneq ($(shell grep -q "ksu_handle_stat.*struct filename" $(srctree)/fs/stat.c; echo $$?),0)
+      SUSFS_TOO_OLD := 1
+    endif
+    ifeq ($(SUSFS_TOO_OLD),1)
+      $(info -- $(REPO_NAME) requires the kernel side of SUSFS v2.3.0 or newer.)
+      $(info -- Your susfs patches are too old (no TIF_PROC_NO_SU or old faccessat/stat hooks).)
+      $(info -- Read: https://gitlab.com/simonpunk/susfs4ksu)
+      $(error Please update the SUSFS kernel patches to v2.3.0+)
+    endif
   else
     $(info -- You have not integrated susfs in your kernel yet.)
     $(info -- Read: https://gitlab.com/simonpunk/susfs4ksu)

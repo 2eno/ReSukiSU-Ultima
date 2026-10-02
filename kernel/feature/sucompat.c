@@ -271,16 +271,14 @@ static inline void ksu_handle_execveat_init(const char *filename, void *envp)
             escape_to_root_for_init();
         }
 #if !defined(CONFIG_KSU_TRACEPOINT_HOOK)
-        else if (likely(strstr(filename, "/app_process") == NULL && strstr(filename, "/adbd") == NULL)) {
+        else if (likely(strstr(filename, "/app_process") == NULL && strstr(filename, "/adbd") == NULL &&
+                        strstr(filename, "/stub_zygote") == NULL)) {
             pr_info("mark no sucompat checks for pid: '%d', exec: '%s'\n", current->pid, filename);
 
+            // With susfs this is TIF_PROC_NO_SU. Don't mark init's children umounted,
+            // only zygote spawned apps get their sus mounts hidden since susfs v2.3.0.
             if (!ksu_is_current_proc_unprivillege())
                 ksu_set_current_proc_unprivillege();
-
-#ifdef CONFIG_KSU_SUSFS
-            if (!susfs_is_current_proc_umounted())
-                susfs_set_current_proc_umounted();
-#endif
         }
 #endif
         int ret = ksu_adb_root_handle_execve_manual(filename, (struct user_arg_ptr *)envp);
@@ -360,9 +358,43 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *
 
     return ksu_handle_execveat(fd, filename_ptr, argv, envp, flags);
 }
+
+// SUSFS v2.3.0+ calls this after bprm_execve() when the hook above returned 0.
+// Upstream KernelSU installs its su session fd here, we don't have one, so
+// there is nothing to do, but the symbol must exist for the susfs hook.
+int ksu_handle_post_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags,
+                                      int *retval)
+{
+    return 0;
+}
 #endif
 #endif
 
+#ifdef CONFIG_KSU_SUSFS
+int ksu_handle_faccessat(int *dfd, struct filename **filename, int *mode, int *__unused_flags)
+{
+    // no need to check ksu_is_current_proc_unprivillege(), susfs already did it in the hook
+
+    if (!static_branch_unlikely(&ksu_su_compat_enabled)) {
+        return 0;
+    }
+
+    if (!ksu_is_allow_uid_for_current(ksu_get_uid_t(current_uid())))
+        return 0;
+
+    if (unlikely(IS_ERR(*filename) || (*filename)->name == NULL)) {
+        return 0;
+    }
+
+    if (likely(memcmp((*filename)->name, su_path, sizeof(su_path)))) {
+        return 0;
+    }
+
+    pr_info("faccessat su->sh!\n");
+    memcpy((void *)((*filename)->name), sh_path, sizeof(sh_path));
+    return 0;
+}
+#else
 int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *__unused_flags)
 {
     char path[sizeof(su_path) + 1] = { 0 };
@@ -397,13 +429,12 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
 
     return 0;
 }
+#endif // #ifdef CONFIG_KSU_SUSFS
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0) && defined(CONFIG_KSU_SUSFS)
+#ifdef CONFIG_KSU_SUSFS
 int ksu_handle_stat(int *dfd, struct filename **filename, int *flags)
 {
-    if (ksu_is_current_proc_unprivillege()) {
-        return 0;
-    }
+    // no need to check ksu_is_current_proc_unprivillege(), susfs already did it in the hook
 
     // Yep, maybe someusers love turn off sucompat <- idk how they managed to keep using it
     // But for mostly users, sucompat is enabled, so unlikely here
@@ -465,7 +496,7 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
 
     return 0;
 }
-#endif // #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#endif // #ifdef CONFIG_KSU_SUSFS
 
 // dead code: devpts handling
 int __maybe_unused ksu_handle_devpts(struct inode *inode)

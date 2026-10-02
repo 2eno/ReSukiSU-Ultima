@@ -33,7 +33,7 @@
 ## Hook 模式
 - `Tracepoint Syscall Redirect hook` 默认模式, 来自于 [上游](https://github.com/tiann/KernelSU), 但是只支持 GKI2 内核且为 `arm64-v8a` 或 `x86_64` 架构
 - `Manual Hook` 兼容性最强的钩子，支持 Linux Kernel 3.4 - Linux Kernel 6.18
-- `SuSFS Inline Hook` 一个来自 [SuSFS](https://github.com/simonpunk/susfs4ksu) 的 Hook, 类似于 `Manual Hook`, 但是由 `SuSFS` 项目，而非本项目
+- `SuSFS Inline Hook` 一个来自 [SuSFS](https://github.com/simonpunk/susfs4ksu) 的 Hook, 类似于 `Manual Hook`, 但是由 `SuSFS` 项目，而非本项目，需要 [SuSFS](https://gitlab.com/simonpunk/susfs4ksu) 内核侧 **v2.3.0** 或更高版本
 
 ## 集成
 

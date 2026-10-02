@@ -27,6 +27,12 @@
 #include "compat/kernel_compat.h"
 #include "feature/kernel_umount.h"
 #include "feature/sucompat.h"
+#include "selinux/selinux.h"
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/workqueue.h>
+#include <linux/susfs_def.h>
+#include "feature/sentinel.h"
+#endif
 
 static inline void ksu_set_file_immutable(const char *path_name, bool immutable)
 {
@@ -76,8 +82,65 @@ static inline void ksu_set_ksud_status(uid_t new_uid)
     }
 }
 
+#ifdef CONFIG_KSU_SUSFS
+extern struct work_struct susfs_extra_works;
+
+// Since Android 17 some apps are spawned by zygote_next, which stays in the init
+// mount namespace, so there is nothing to umount here. Just flag the process and
+// let susfs (v2.3.0+) hide the sus mounts from it.
+static void ksu_handle_zygote_next_setuid(uid_t new_uid)
+{
+    // isolated services are always handled like umounted apps
+    if (is_isolated_process(new_uid))
+        goto mark_umounted;
+
+    // we should not umount for webview zygote
+    if (unlikely(new_uid == WEBVIEW_ZYGOTE_UID)) {
+        susfs_set_current_proc_no_su();
+        return;
+    }
+
+    if (likely(is_appuid(new_uid) && (ksu_uid_should_umount(new_uid) || ksu_sentinel_is_cloaked(new_uid))))
+        goto mark_umounted;
+
+    if (ksu_is_allow_uid_for_current(new_uid)) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+        if (current->seccomp.mode == SECCOMP_MODE_FILTER && current->seccomp.filter) {
+            spin_lock_irq(&current->sighand->siglock);
+            ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
+            spin_unlock_irq(&current->sighand->siglock);
+        }
+#else
+        disable_seccomp();
+#endif
+        // don't let a no_su flag inherited from zygote_next block su
+        susfs_clear_current_proc_no_su();
+        return;
+    }
+
+    susfs_set_current_proc_no_su();
+    return;
+
+mark_umounted:
+    susfs_set_current_proc_no_su();
+    susfs_set_current_proc_umounted();
+    susfs_set_current_proc_umounted_for_zygote_next();
+
+    if (!work_pending(&susfs_extra_works))
+        schedule_work(&susfs_extra_works);
+}
+#endif // #ifdef CONFIG_KSU_SUSFS
+
 int ksu_handle_setuid(uid_t new_uid, uid_t old_uid)
 {
+#ifdef CONFIG_KSU_SUSFS
+    // zygote_next is only handled with susfs, tracepoint / manual hook don't need it
+    if (unlikely(is_zygote_next(current_cred()))) {
+        ksu_handle_zygote_next_setuid(new_uid);
+        return 0;
+    }
+#endif
+
     // We are only interested in processes spawned by zygote.
     if (!is_zygote(current_cred())) {
         return 0;
