@@ -45,6 +45,13 @@ A based-on [`SukiSU-Ultra/SukiSU-Ultra`](https://github.com/SukiSU-Ultra/SukiSU-
 
 See the [repository](https://github.com/spacealtctrl/ReSukiSU-Ultima).
 
+### Prebuilt GKI kernel with SUSFS
+
+The `Build GKI Kernel (ReSukiSU Ultima + SUSFS)` workflow (`.github/workflows/build-gki-susfs.yml`) builds an `android15-6.6` GKI kernel from the Android Common Kernel with ReSukiSU Ultima built in and the SUSFS inline hooks enabled. By default it targets the Pixel 10 Pro XL (`mustang`). Run it from the Actions tab, then pick the ACK release branch and the device codename.
+
+- The `…-AnyKernel3` artifact is already a flashable zip. Flash it with the ReSukiSU manager or Kernel Flasher.
+- The `…-Image` artifact contains `Image`, `Image.lz4` and `Image.gz`, so you can repack your stock `boot.img` with `magiskboot`.
+
 ## KPM Support
 
 - Based on KernelPatch, we removed features redundant with KSU and retained only KPM support.
