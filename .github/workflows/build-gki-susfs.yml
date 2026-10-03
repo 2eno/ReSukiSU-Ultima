@@ -310,9 +310,10 @@ jobs:
         run: |
           set -euo pipefail
           cd "$KERNEL_DIR"
-          # --config=fast = --config=local --lto=thin; local (unsandboxed)
-          # builds keep the KernelSU git checkout reachable for Kbuild.
-          tools/bazel build --config=fast --config=stamp //common:kernel_aarch64
+          # --config=fast builds unsandboxed (--config=local), which keeps the
+          # KernelSU git checkout reachable for Kbuild. It does not enable LTO
+          # on its own, so ask for thin LTO explicitly.
+          tools/bazel build --config=fast --config=stamp --lto=thin //common:kernel_aarch64
 
       - name: Verify and collect build
         run: |
@@ -331,7 +332,7 @@ jobs:
             fi
             cp "$FOUND" "$CONFIG_FILE"
           fi
-          for cfg in CONFIG_KSU=y CONFIG_KSU_SUSFS=y; do
+          for cfg in CONFIG_KSU=y CONFIG_KSU_SUSFS=y CONFIG_LTO_CLANG_THIN=y; do
             grep -qx "$cfg" "$CONFIG_FILE" || { echo "::error::$cfg missing from the built kernel"; exit 1; }
           done
           grep -E '^CONFIG_(KSU|TMPFS_XATTR|TMPFS_POSIX_ACL|LTO_CLANG)' "$CONFIG_FILE"
