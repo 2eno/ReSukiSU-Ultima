@@ -161,7 +161,7 @@ jobs:
             } >> gradle.properties
             # Tolerate line breaks, quotes and certutil-style BEGIN/END lines
             if ! printf '%s\n' "$KEYSTORE" | sed '/^-----/d' | tr -d '[:space:]"' | base64 -d > key.jks; then
-              echo "::error::The KEYSTORE secret is not valid base64. Store the output of: base64 -w0 your-key.jks"
+              echo "::error::The KEYSTORE secret is not valid base64 (it is ${#KEYSTORE} characters long, a base64-encoded keystore has about 2000 or more). Store the output of: base64 -w0 your-key.jks"
               exit 1
             fi
           fi

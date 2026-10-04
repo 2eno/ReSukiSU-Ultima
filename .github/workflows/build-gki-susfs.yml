@@ -102,7 +102,7 @@ jobs:
             # block the kernel build, it only means no extra manager key.
             if ! printf '%s\n' "$KEYSTORE" | sed '/^-----/d' | tr -d '[:space:]"' \
                 | base64 -d > "$RUNNER_TEMP/manager.jks" 2>/dev/null; then
-              echo "::warning::The KEYSTORE secret is not valid base64 (expected the output of: base64 -w0 your-key.jks). Building without an extra manager key."
+              echo "::warning::The KEYSTORE secret is not valid base64 (it is ${#KEYSTORE} characters long, a base64-encoded keystore has about 2000 or more). Expected the output of: base64 -w0 your-key.jks. Building without an extra manager key."
               exit 0
             fi
             if ! keytool -exportcert -alias "$KEY_ALIAS" -keystore "$RUNNER_TEMP/manager.jks" \
