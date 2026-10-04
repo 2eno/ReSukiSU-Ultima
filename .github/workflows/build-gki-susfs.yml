@@ -34,7 +34,7 @@ on:
         type: string
         default: gki-android15-6.6
       manager_expected_size:
-        description: 'Optional: signature size of a self-signed manager, e.g. 0x3e6 (leave empty for the built-in managers)'
+        description: 'Optional: signature size of a self-signed manager, e.g. 0x3e6 (empty = key from the KEYSTORE secret if set, else only the built-in managers)'
         type: string
         default: ''
       manager_expected_hash:
@@ -69,6 +69,46 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 330
     steps:
+      # Runs before the cleanup below, which removes the JDK (keytool).
+      - name: Resolve manager signature
+        id: manager_key
+        env:
+          INPUT_SIZE: ${{ inputs.manager_expected_size }}
+          INPUT_HASH: ${{ inputs.manager_expected_hash }}
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_SIZE" ] || [ -n "$INPUT_HASH" ]; then
+            SIZE="$INPUT_SIZE"
+            HASH="$INPUT_HASH"
+            echo "Using the manager signature from the workflow inputs"
+          elif [ -n "$KEYSTORE" ]; then
+            # Same key that Build Manager signs this fork's manager with, so
+            # kernel and manager built from this repository always match.
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/manager.jks"
+            keytool -exportcert -alias "$KEY_ALIAS" -keystore "$RUNNER_TEMP/manager.jks" \
+              -storepass "$KEYSTORE_PASSWORD" -file "$RUNNER_TEMP/manager.der"
+            SIZE=$(printf '0x%04x' "$(stat -c%s "$RUNNER_TEMP/manager.der")")
+            HASH=$(sha256sum "$RUNNER_TEMP/manager.der" | awk '{print $1}')
+            rm -f "$RUNNER_TEMP/manager.jks" "$RUNNER_TEMP/manager.der"
+            echo "Using the manager signing key from the KEYSTORE secret"
+          else
+            echo "No custom manager signature, only the built-in managers are trusted"
+            exit 0
+          fi
+          if ! [[ "$SIZE" =~ ^0x[0-9a-fA-F]+$ ]] || ! [[ "$HASH" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::manager signature size must look like 0x3e6 and the hash must be 64 hex characters"
+            exit 1
+          fi
+          HASH="${HASH,,}"
+          echo "Manager signature: size $SIZE, sha256 $HASH"
+          {
+            echo "size=$SIZE"
+            echo "hash=$HASH"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Maximize build space
         run: |
           echo "Before cleanup:"; df -h / /mnt 2>/dev/null || true
@@ -200,18 +240,14 @@ jobs:
           echo "KSU_VERSION_CODE=$((30000 + $(git rev-list --count HEAD) + 700))" >> "$GITHUB_ENV"
 
       - name: Use custom manager signature
-        if: inputs.manager_expected_size != '' || inputs.manager_expected_hash != ''
+        if: steps.manager_key.outputs.size != ''
         env:
-          SIZE: ${{ inputs.manager_expected_size }}
-          HASH: ${{ inputs.manager_expected_hash }}
+          SIZE: ${{ steps.manager_key.outputs.size }}
+          HASH: ${{ steps.manager_key.outputs.hash }}
         run: |
           set -euo pipefail
-          if ! [[ "$SIZE" =~ ^0x[0-9a-fA-F]+$ ]] || ! [[ "$HASH" =~ ^[0-9a-fA-F]{64}$ ]]; then
-            echo "::error::manager_expected_size must look like 0x3e6 and manager_expected_hash must be 64 hex characters"
-            exit 1
-          fi
           cd "$KERNEL_DIR/KernelSU"
-          sed -i "1i KSU_EXPECTED_SIZE := ${SIZE}\nKSU_EXPECTED_HASH := ${HASH,,}" kernel/Kbuild
+          sed -i "1i KSU_EXPECTED_SIZE := ${SIZE}\nKSU_EXPECTED_HASH := ${HASH}" kernel/Kbuild
           # Keep the version name free of the "-dirty" marker
           git update-index --assume-unchanged kernel/Kbuild
           head -n 3 kernel/Kbuild
@@ -457,6 +493,9 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          MANAGER_SIZE: ${{ steps.manager_key.outputs.size }}
+          MANAGER_HASH: ${{ steps.manager_key.outputs.hash }}
         run: |
           {
             echo "## ReSukiSU Ultima + SUSFS GKI kernel"
@@ -469,6 +508,7 @@ jobs:
             echo "| ReSukiSU Ultima | \`${KSU_VERSION_NAME:-n/a}\` (version code ${KSU_VERSION_CODE:-n/a}, \`${KSU_COMMIT:-n/a}\`) |"
             echo "| SUSFS | \`${SUSFS_VERSION:-n/a}\` @ \`${SUSFS_COMMIT:-n/a}\` |"
             echo "| Hook mode | SuSFS Inline Hook |"
+            echo "| Extra trusted manager | \`${MANAGER_SIZE:-none}\` \`${MANAGER_HASH:-}\` |"
             echo "| Device check | \`${DEVICE}\` |"
             echo
             echo "Flash the **AnyKernel3** artifact (the downloaded zip is flashable as-is) with the"
