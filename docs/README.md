@@ -51,6 +51,7 @@ The `Build GKI Kernel (ReSukiSU Ultima + SUSFS)` workflow (`.github/workflows/bu
 
 - The `…-AnyKernel3` artifact is already a flashable zip. Flash it with the ReSukiSU manager or Kernel Flasher.
 - The `…-Image` artifact contains `Image`, `Image.lz4` and `Image.gz`, so you can repack your stock `boot.img` with `magiskboot`.
+- KPM is enabled by default (`kpm` input). The kernel is built with `CONFIG_KPM=y` and the Image is already patched with KernelPatch 0.12.2, the same `kpimg` the manager bundles. Leave the manager's KPM patch option off when you flash it.
 - Pair the kernel with a ReSukiSU **Ultima** manager. The upstream ReSukiSU manager uses another signing key and a newer UAPI, so the kernel does not recognize it. If you sign your own manager build through the `KEYSTORE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` secrets, the kernel workflow trusts that key automatically.
 
 ## KPM Support

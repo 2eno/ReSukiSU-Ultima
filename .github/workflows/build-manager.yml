@@ -149,15 +149,18 @@ jobs:
 
       - name: Write key
         if: ${{ github.event_name == 'workflow_dispatch' || ( github.event_name != 'pull_request') || github.ref_type == 'tag' }}
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
         run: |
-          if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
+          if [ -n "$KEYSTORE" ]; then
             {
               echo KEYSTORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}'
               echo KEY_ALIAS='${{ secrets.KEY_ALIAS }}'
               echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}'
               echo KEYSTORE_FILE='key.jks'
             } >> gradle.properties
-            echo "${{ secrets.KEYSTORE }}" | base64 -d > key.jks
+            # Tolerate line breaks/spaces from copy-pasting the base64 text
+            printf '%s' "$KEYSTORE" | tr -d '[:space:]' | base64 -d > key.jks
           fi
 
       - name: Write PR key
