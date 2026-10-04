@@ -149,15 +149,43 @@ jobs:
 
       - name: Write key
         if: ${{ github.event_name == 'workflow_dispatch' || ( github.event_name != 'pull_request') || github.ref_type == 'tag' }}
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
         run: |
-          if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
+          if [ -n "$KEYSTORE" ]; then
             {
               echo KEYSTORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}'
               echo KEY_ALIAS='${{ secrets.KEY_ALIAS }}'
               echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}'
               echo KEYSTORE_FILE='key.jks'
             } >> gradle.properties
-            echo "${{ secrets.KEYSTORE }}" | base64 -d > key.jks
+            # Accept the usual copy-paste variants of the base64 text
+            if ! ERR=$(python3 - key.jks 2>&1 <<'PY'
+          import base64, os, re, sys
+          s = os.environ.get("KEYSTORE", "")
+          s = re.sub(r"-----(BEGIN|END)[^-]*-----", "", s)  # certutil / PEM armor
+          s = re.sub(r"\\[rn]", "", s)                       # literal \n escapes
+          s = re.sub(r"^\s*data:[^,]*,", "", s.strip())      # data: URL prefix
+          s = re.sub(r"[\s\"']", "", s)
+          s = s.replace("-", "+").replace("_", "/")          # base64url
+          s = s.rstrip("=")
+          s += "=" * (-len(s) % 4)
+          bad = sorted(set(re.sub(r"[A-Za-z0-9+/=]", "", s)))
+          if bad:
+              sys.exit("contains characters that are not base64: " + " ".join(repr(c) for c in bad))
+          try:
+              data = base64.b64decode(s, validate=True)
+          except Exception as e:
+              sys.exit(f"cannot be decoded ({e})")
+          if data[:4] != b"\xfe\xed\xfe\xed" and data[:1] != b"\x30":
+              sys.exit(f"decodes to {len(data)} bytes that are not a JKS/PKCS12 keystore")
+          with open(sys.argv[1], "wb") as f:
+              f.write(data)
+          PY
+            ); then
+              echo "::error::The KEYSTORE secret (${#KEYSTORE} characters) ${ERR##*$'\n'}. Store the output of: base64 -w0 your-key.jks"
+              exit 1
+            fi
           fi
 
       - name: Write PR key
