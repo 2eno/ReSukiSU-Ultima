@@ -58,8 +58,10 @@ env:
   OS_PATCH_LEVEL: ${{ inputs.os_patch_level || 'lts' }}
   DEVICE: ${{ inputs.device || 'mustang' }}
   SUSFS_REF: ${{ inputs.susfs_ref || 'gki-android15-6.6' }}
-  # osm0sis/AnyKernel3 master, pinned for reproducible flashing behaviour
+  # osm0sis/AnyKernel3 master and its arm64-tools branch (same Magisk utils
+  # release), pinned for reproducible flashing behaviour
   ANYKERNEL3_COMMIT: 020dfeccf9d7e962a48400fc94d3e451df92eead
+  ANYKERNEL3_ARM64_TOOLS_COMMIT: f1a6f5ec47749252d30cc5e26f71f06b14cba617
 
 jobs:
   build:
@@ -106,7 +108,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq git curl python3 zip lz4 >/dev/null
+          sudo apt-get install -y -qq git curl python3 zip lz4 file >/dev/null
           mkdir -p "$HOME/bin"
           curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
           chmod a+x "$HOME/bin/repo"
@@ -367,7 +369,18 @@ jobs:
           AK3="$WORK_DIR/out/AnyKernel3"
           git clone https://github.com/osm0sis/AnyKernel3.git "$AK3"
           git -C "$AK3" checkout -q "$ANYKERNEL3_COMMIT"
+
+          # The default tools are 32-bit ARM, which 64-bit-only SoCs such as
+          # Tensor G3+ (Pixel 8 and newer) cannot execute at all. Use the
+          # upstream arm64 builds instead.
+          git -C "$AK3" fetch -q origin "$ANYKERNEL3_ARM64_TOOLS_COMMIT"
+          git -C "$AK3" archive "$ANYKERNEL3_ARM64_TOOLS_COMMIT" | tar -x -C "$AK3/tools"
           rm -rf "$AK3/.git" "$AK3/.github" "$AK3/README.md" "$AK3/modules" "$AK3/patch" "$AK3/ramdisk"
+          file "$AK3"/tools/*
+          if file "$AK3"/tools/* | grep 'ELF' | grep -v 'ARM aarch64'; then
+            echo "::error::AnyKernel3 tools must all be arm64 binaries"
+            exit 1
+          fi
 
           if [ "$DEVICE" = none ]; then
             DEVICE_CHECK=0
