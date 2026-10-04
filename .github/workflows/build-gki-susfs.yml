@@ -97,12 +97,33 @@ jobs:
           elif [ -n "$KEYSTORE" ]; then
             # Same key that Build Manager signs this fork's manager with, so
             # kernel and manager built from this repository always match.
-            # Tolerate line breaks, quotes and certutil-style BEGIN/END lines
-            # from copy-pasting the base64 text. A broken secret must not
-            # block the kernel build, it only means no extra manager key.
-            if ! printf '%s\n' "$KEYSTORE" | sed '/^-----/d' | tr -d '[:space:]"' \
-                | base64 -d > "$RUNNER_TEMP/manager.jks" 2>/dev/null; then
-              echo "::warning::The KEYSTORE secret is not valid base64 (it is ${#KEYSTORE} characters long, a base64-encoded keystore has about 2000 or more). Expected the output of: base64 -w0 your-key.jks. Building without an extra manager key."
+            # Accept the usual copy-paste variants of the base64 text. A broken
+            # secret must not block the kernel build, it only means no extra
+            # manager key.
+            if ! ERR=$(python3 - "$RUNNER_TEMP/manager.jks" 2>&1 <<'PY'
+          import base64, os, re, sys
+          s = os.environ.get("KEYSTORE", "")
+          s = re.sub(r"-----(BEGIN|END)[^-]*-----", "", s)  # certutil / PEM armor
+          s = re.sub(r"\\[rn]", "", s)                       # literal \n escapes
+          s = re.sub(r"^\s*data:[^,]*,", "", s.strip())      # data: URL prefix
+          s = re.sub(r"[\s\"']", "", s)
+          s = s.replace("-", "+").replace("_", "/")          # base64url
+          s = s.rstrip("=")
+          s += "=" * (-len(s) % 4)
+          bad = sorted(set(re.sub(r"[A-Za-z0-9+/=]", "", s)))
+          if bad:
+              sys.exit("contains characters that are not base64: " + " ".join(repr(c) for c in bad))
+          try:
+              data = base64.b64decode(s, validate=True)
+          except Exception as e:
+              sys.exit(f"cannot be decoded ({e})")
+          if data[:4] != b"\xfe\xed\xfe\xed" and data[:1] != b"\x30":
+              sys.exit(f"decodes to {len(data)} bytes that are not a JKS/PKCS12 keystore")
+          with open(sys.argv[1], "wb") as f:
+              f.write(data)
+          PY
+            ); then
+              echo "::warning::The KEYSTORE secret (${#KEYSTORE} characters) ${ERR##*$'\n'}. Store the output of: base64 -w0 your-key.jks. Building without an extra manager key."
               exit 0
             fi
             if ! keytool -exportcert -alias "$KEY_ALIAS" -keystore "$RUNNER_TEMP/manager.jks" \
