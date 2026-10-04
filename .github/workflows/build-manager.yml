@@ -159,8 +159,11 @@ jobs:
               echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}'
               echo KEYSTORE_FILE='key.jks'
             } >> gradle.properties
-            # Tolerate line breaks/spaces from copy-pasting the base64 text
-            printf '%s' "$KEYSTORE" | tr -d '[:space:]' | base64 -d > key.jks
+            # Tolerate line breaks, quotes and certutil-style BEGIN/END lines
+            if ! printf '%s\n' "$KEYSTORE" | sed '/^-----/d' | tr -d '[:space:]"' | base64 -d > key.jks; then
+              echo "::error::The KEYSTORE secret is not valid base64. Store the output of: base64 -w0 your-key.jks"
+              exit 1
+            fi
           fi
 
       - name: Write PR key

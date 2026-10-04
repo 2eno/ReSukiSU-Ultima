@@ -97,15 +97,19 @@ jobs:
           elif [ -n "$KEYSTORE" ]; then
             # Same key that Build Manager signs this fork's manager with, so
             # kernel and manager built from this repository always match.
-            # Tolerate line breaks/spaces from copy-pasting the base64 text
-            if ! printf '%s' "$KEYSTORE" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/manager.jks" 2>/dev/null; then
-              echo "::error::The KEYSTORE secret is not valid base64. Store the output of: base64 -w0 your-key.jks"
-              exit 1
+            # Tolerate line breaks, quotes and certutil-style BEGIN/END lines
+            # from copy-pasting the base64 text. A broken secret must not
+            # block the kernel build, it only means no extra manager key.
+            if ! printf '%s\n' "$KEYSTORE" | sed '/^-----/d' | tr -d '[:space:]"' \
+                | base64 -d > "$RUNNER_TEMP/manager.jks" 2>/dev/null; then
+              echo "::warning::The KEYSTORE secret is not valid base64 (expected the output of: base64 -w0 your-key.jks). Building without an extra manager key."
+              exit 0
             fi
             if ! keytool -exportcert -alias "$KEY_ALIAS" -keystore "$RUNNER_TEMP/manager.jks" \
                 -storepass "$KEYSTORE_PASSWORD" -file "$RUNNER_TEMP/manager.der"; then
-              echo "::error::Could not read the KEYSTORE secret. Check KEYSTORE_PASSWORD and KEY_ALIAS."
-              exit 1
+              echo "::warning::keytool cannot read the KEYSTORE secret (check KEYSTORE_PASSWORD and KEY_ALIAS). Building without an extra manager key."
+              rm -f "$RUNNER_TEMP/manager.jks"
+              exit 0
             fi
             SIZE=$(printf '0x%04x' "$(stat -c%s "$RUNNER_TEMP/manager.der")")
             HASH=$(sha256sum "$RUNNER_TEMP/manager.der" | awk '{print $1}')
