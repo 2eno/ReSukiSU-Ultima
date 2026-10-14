@@ -29,6 +29,10 @@ on:
         description: 'Device codename for the AnyKernel3 device check ("none" disables the check)'
         type: string
         default: mustang
+      kpm:
+        description: 'Enable KPM (KernelPatch modules): builds with CONFIG_KPM and patches the Image with kpimg'
+        type: boolean
+        default: true
       susfs_ref:
         description: 'susfs4ksu branch, tag or commit (kernel side must be SUSFS v2.3.0+)'
         type: string
@@ -58,6 +62,12 @@ env:
   OS_PATCH_LEVEL: ${{ inputs.os_patch_level || 'lts' }}
   DEVICE: ${{ inputs.device || 'mustang' }}
   SUSFS_REF: ${{ inputs.susfs_ref || 'gki-android15-6.6' }}
+  # push builds have no inputs, KPM is on by default there too
+  KPM: ${{ github.event_name != 'workflow_dispatch' || inputs.kpm }}
+  # SukiSU KernelPatch patcher, same KernelPatch release (0.12.2) as the
+  # kpimg the manager bundles
+  KPM_PATCHER_URL: https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux
+  KPM_PATCHER_SHA256: 0fb1ebee20fecca70f2c5a5cb06bf2efce71c84c416132948047129dc6bfc302
   # osm0sis/AnyKernel3 master and its arm64-tools branch (same Magisk utils
   # release), pinned for reproducible flashing behaviour
   ANYKERNEL3_COMMIT: 020dfeccf9d7e962a48400fc94d3e451df92eead
@@ -87,9 +97,41 @@ jobs:
           elif [ -n "$KEYSTORE" ]; then
             # Same key that Build Manager signs this fork's manager with, so
             # kernel and manager built from this repository always match.
-            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/manager.jks"
-            keytool -exportcert -alias "$KEY_ALIAS" -keystore "$RUNNER_TEMP/manager.jks" \
-              -storepass "$KEYSTORE_PASSWORD" -file "$RUNNER_TEMP/manager.der"
+            # Accept the usual copy-paste variants of the base64 text. A broken
+            # secret must not block the kernel build, it only means no extra
+            # manager key.
+            if ! ERR=$(python3 - "$RUNNER_TEMP/manager.jks" 2>&1 <<'PY'
+          import base64, os, re, sys
+          s = os.environ.get("KEYSTORE", "")
+          s = re.sub(r"-----(BEGIN|END)[^-]*-----", "", s)  # certutil / PEM armor
+          s = re.sub(r"\\[rn]", "", s)                       # literal \n escapes
+          s = re.sub(r"^\s*data:[^,]*,", "", s.strip())      # data: URL prefix
+          s = re.sub(r"[\s\"']", "", s)
+          s = s.replace("-", "+").replace("_", "/")          # base64url
+          s = s.rstrip("=")
+          s += "=" * (-len(s) % 4)
+          bad = sorted(set(re.sub(r"[A-Za-z0-9+/=]", "", s)))
+          if bad:
+              sys.exit("contains characters that are not base64: " + " ".join(repr(c) for c in bad))
+          try:
+              data = base64.b64decode(s, validate=True)
+          except Exception as e:
+              sys.exit(f"cannot be decoded ({e})")
+          if data[:4] != b"\xfe\xed\xfe\xed" and data[:1] != b"\x30":
+              sys.exit(f"decodes to {len(data)} bytes that are not a JKS/PKCS12 keystore")
+          with open(sys.argv[1], "wb") as f:
+              f.write(data)
+          PY
+            ); then
+              echo "::warning::The KEYSTORE secret (${#KEYSTORE} characters) ${ERR##*$'\n'}. Store the output of: base64 -w0 your-key.jks. Building without an extra manager key."
+              exit 0
+            fi
+            if ! keytool -exportcert -alias "$KEY_ALIAS" -keystore "$RUNNER_TEMP/manager.jks" \
+                -storepass "$KEYSTORE_PASSWORD" -file "$RUNNER_TEMP/manager.der"; then
+              echo "::warning::keytool cannot read the KEYSTORE secret (check KEYSTORE_PASSWORD and KEY_ALIAS). Building without an extra manager key."
+              rm -f "$RUNNER_TEMP/manager.jks"
+              exit 0
+            fi
             SIZE=$(printf '0x%04x' "$(stat -c%s "$RUNNER_TEMP/manager.der")")
             HASH=$(sha256sum "$RUNNER_TEMP/manager.der" | awk '{print $1}')
             rm -f "$RUNNER_TEMP/manager.jks" "$RUNNER_TEMP/manager.der"
@@ -309,7 +351,10 @@ jobs:
             CONFIG_TMPFS_POSIX_ACL=y; do
             set_config "$cfg"
           done
-          tail -n 13 "$DEFCONFIG"
+          if [ "$KPM" = true ]; then
+            set_config CONFIG_KPM=y
+          fi
+          tail -n 14 "$DEFCONFIG"
 
           # The added options are not part of the stock savedefconfig output.
           sed -i 's/check_defconfig//' build.config.gki
@@ -370,10 +415,12 @@ jobs:
             fi
             cp "$FOUND" "$CONFIG_FILE"
           fi
-          for cfg in CONFIG_KSU=y CONFIG_KSU_SUSFS=y CONFIG_LTO_CLANG_THIN=y; do
+          REQUIRED="CONFIG_KSU=y CONFIG_KSU_SUSFS=y CONFIG_LTO_CLANG_THIN=y"
+          [ "$KPM" != true ] || REQUIRED="$REQUIRED CONFIG_KPM=y"
+          for cfg in $REQUIRED; do
             grep -qx "$cfg" "$CONFIG_FILE" || { echo "::error::$cfg missing from the built kernel"; exit 1; }
           done
-          grep -E '^CONFIG_(KSU|TMPFS_XATTR|TMPFS_POSIX_ACL|LTO_CLANG)' "$CONFIG_FILE"
+          grep -E '^CONFIG_(KSU|KPM|TMPFS_XATTR|TMPFS_POSIX_ACL|LTO_CLANG)' "$CONFIG_FILE"
 
           strings "$OUT/Image" > "$WORK_DIR/image.strings"
           LINUX_BANNER=$(grep -m1 '^Linux version ' "$WORK_DIR/image.strings" || true)
@@ -386,7 +433,9 @@ jobs:
           echo "Kernel: $LINUX_BANNER"
           echo "ReSukiSU: $KSU_VERSION_NAME"
 
-          NAME="ReSukiSU-Ultima-SUSFS_${KERNEL_RELEASE}"
+          NAME="ReSukiSU-Ultima-SUSFS"
+          [ "$KPM" != true ] || NAME="${NAME}-KPM"
+          NAME="${NAME}_${KERNEL_RELEASE}"
           [ "$DEVICE" = none ] || NAME="${NAME}_${DEVICE}"
           {
             echo "KERNEL_RELEASE=$KERNEL_RELEASE"
@@ -398,6 +447,32 @@ jobs:
           cp "$OUT/Image" "$OUT/Image.lz4" "$OUT/Image.gz" "$WORK_DIR/out/image/"
           (cd "$WORK_DIR/out/image" && sha256sum Image Image.lz4 Image.gz > sha256sums.txt)
           ls -la "$WORK_DIR/out/image"
+
+      - name: Patch KPM into Image
+        if: env.KPM == 'true'
+        run: |
+          set -euo pipefail
+          KPM_DIR="$WORK_DIR/kpm"
+          mkdir -p "$KPM_DIR"
+          curl -fsSL "$KPM_PATCHER_URL" -o "$KPM_DIR/patch_linux"
+          echo "$KPM_PATCHER_SHA256  $KPM_DIR/patch_linux" | sha256sum -c -
+          chmod +x "$KPM_DIR/patch_linux"
+
+          # patch_linux reads ./Image and writes the patched kernel to ./oImage
+          cp "$WORK_DIR/out/image/Image" "$KPM_DIR/Image"
+          (cd "$KPM_DIR" && ./patch_linux)
+          if [ ! -s "$KPM_DIR/oImage" ] || cmp -s "$KPM_DIR/Image" "$KPM_DIR/oImage"; then
+            echo "::error::patch_linux did not produce a patched Image"
+            exit 1
+          fi
+
+          cd "$WORK_DIR/out/image"
+          mv "$KPM_DIR/oImage" Image
+          # Regenerate the compressed variants from the patched Image
+          lz4 -f -l -12 --favor-decSpeed Image Image.lz4
+          gzip -n -9 -c Image > Image.gz
+          sha256sum Image Image.lz4 Image.gz > sha256sums.txt
+          ls -la
 
       - name: Package AnyKernel3
         run: |
@@ -425,6 +500,8 @@ jobs:
             DEVICE_CHECK=1
             DEVICE_NAME="$DEVICE"
           fi
+          KPM_LABEL=
+          [ "$KPM" != true ] || KPM_LABEL=" + KPM"
 
           cat > "$AK3/anykernel.sh" <<EOF
           ### AnyKernel3 Ramdisk Mod Script
@@ -433,7 +510,7 @@ jobs:
           ### AnyKernel setup
           # global properties
           properties() { '
-          kernel.string=ReSukiSU Ultima + SUSFS ${SUSFS_VERSION} | ${KERNEL_RELEASE}
+          kernel.string=ReSukiSU Ultima + SUSFS ${SUSFS_VERSION}${KPM_LABEL} | ${KERNEL_RELEASE}
           do.devicecheck=${DEVICE_CHECK}
           do.modules=0
           do.systemless=0
@@ -508,6 +585,7 @@ jobs:
             echo "| ReSukiSU Ultima | \`${KSU_VERSION_NAME:-n/a}\` (version code ${KSU_VERSION_CODE:-n/a}, \`${KSU_COMMIT:-n/a}\`) |"
             echo "| SUSFS | \`${SUSFS_VERSION:-n/a}\` @ \`${SUSFS_COMMIT:-n/a}\` |"
             echo "| Hook mode | SuSFS Inline Hook |"
+            echo "| KPM | \`${KPM}\` |"
             echo "| Extra trusted manager | \`${MANAGER_SIZE:-none}\` \`${MANAGER_HASH:-}\` |"
             echo "| Device check | \`${DEVICE}\` |"
             echo
