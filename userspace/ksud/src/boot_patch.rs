@@ -336,7 +336,9 @@ fn parse_kmi_from_kernel(kernel: &PathBuf) -> Result<String> {
 }
 
 fn parse_kmi_from_boot(image: &PathBuf) -> Result<String> {
-    let image = unsafe { Mmap::map(&File::open(image)?)? };
+    // map_file() takes the length from seeking to the end, metadata reports 0
+    // for block devices such as /dev/block/by-name/boot_a (OTA install)
+    let image = map_file(image)?;
 
     let bootimage = BootImage::parse(&image)?;
     if let Some(kernel) = bootimage.get_blocks().get_kernel() {
